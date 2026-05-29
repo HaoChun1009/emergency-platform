@@ -18,8 +18,11 @@ const dynamicFields = document.getElementById("dynamic-fields");
 const descriptionEl = document.getElementById("description");
 const voiceBtn = document.getElementById("voice-btn");
 const voiceStatus = document.getElementById("voice-status");
+const photosInput = document.getElementById("photos");
+const photoPreview = document.getElementById("photo-preview");
 
 let currentCoords = null; // { lat, lng }
+let selectedPhotos = []; // [{ name, dataUrl }]
 
 /* ============================================================
    功能 1:依事件類型顯示對應的災損樣態欄位
@@ -213,6 +216,87 @@ if (SpeechRecognition) {
 }
 
 /* ============================================================
+   功能 4:現場照片(壓縮 + 預覽 + 隨通報上傳)
+   ============================================================ */
+
+const MAX_PHOTOS = 5;
+const MAX_DIMENSION = 1280; // 壓縮後最長邊
+const JPEG_QUALITY = 0.7;
+
+photosInput.addEventListener("change", async () => {
+  const files = Array.from(photosInput.files || []);
+  for (const file of files) {
+    if (selectedPhotos.length >= MAX_PHOTOS) {
+      alert(`最多上傳 ${MAX_PHOTOS} 張照片。`);
+      break;
+    }
+    if (!file.type.startsWith("image/")) continue;
+    try {
+      const dataUrl = await compressImage(file);
+      selectedPhotos.push({ name: file.name, dataUrl });
+    } catch (err) {
+      console.warn("照片壓縮失敗:", file.name, err);
+    }
+  }
+  photosInput.value = ""; // 清空以便可重複選同一檔
+  renderPhotoPreview();
+});
+
+// 用 canvas 壓縮圖片,輸出 JPEG dataURL
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > MAX_DIMENSION) {
+          height = Math.round((height * MAX_DIMENSION) / width);
+          width = MAX_DIMENSION;
+        } else if (height > MAX_DIMENSION) {
+          width = Math.round((width * MAX_DIMENSION) / height);
+          height = MAX_DIMENSION;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", JPEG_QUALITY));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPhotoPreview() {
+  photoPreview.innerHTML = "";
+  selectedPhotos.forEach((photo, index) => {
+    const thumb = document.createElement("div");
+    thumb.className = "photo-thumb";
+
+    const img = document.createElement("img");
+    img.src = photo.dataUrl;
+    thumb.appendChild(img);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove";
+    remove.textContent = "×";
+    remove.title = "移除這張";
+    remove.addEventListener("click", () => {
+      selectedPhotos.splice(index, 1);
+      renderPhotoPreview();
+    });
+    thumb.appendChild(remove);
+
+    photoPreview.appendChild(thumb);
+  });
+}
+
+/* ============================================================
    送出表單
    ============================================================ */
 
@@ -254,13 +338,20 @@ form.addEventListener("submit", async (e) => {
     details: dynamicData,
     reporter: form.reporter.value.trim(),
     phone: form.phone.value.trim(),
+    photos: selectedPhotos, // [{ name, dataUrl }]
     createdAt: new Date().toISOString(),
     status: "new",
   };
 
+  // localStorage 備份不含照片(體積大,避免塞爆),其餘照存
+  const { photos, ...dataWithoutPhotos } = data;
   const reports = JSON.parse(localStorage.getItem("reports") || "[]");
-  reports.push(data);
-  localStorage.setItem("reports", JSON.stringify(reports));
+  reports.push(dataWithoutPhotos);
+  try {
+    localStorage.setItem("reports", JSON.stringify(reports));
+  } catch (err) {
+    console.warn("localStorage 備份失敗(可能已滿):", err);
+  }
 
   submitBtn.disabled = true;
   submitBtn.textContent = "送出中…";
@@ -296,6 +387,8 @@ function showSuccess(caseId) {
 newReportBtn.addEventListener("click", () => {
   form.reset();
   currentCoords = null;
+  selectedPhotos = [];
+  photoPreview.innerHTML = "";
   coordsEl.textContent = "";
   voiceStatus.textContent = "";
   dynamicFields.innerHTML = "";

@@ -84,6 +84,15 @@
         <small id="voice-status" class="hint"></small>
       </div>
 
+      <!-- 現場照片 -->
+      <div class="field">
+        <label for="photos">現場照片</label>
+        <input type="file" id="photos" name="photos"
+               accept="image/*" capture="environment" multiple class="file-input" />
+        <small class="hint">可選擇多張,或用手機直接拍照;系統會自動壓縮後上傳。</small>
+        <div id="photo-preview" class="photo-preview"></div>
+      </div>
+
       <!-- 通報人 -->
       <div class="field-row">
         <div class="field">
