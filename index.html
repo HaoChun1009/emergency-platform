@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>緊急事件通報平台</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="logo">🚨</span>
+      <h1>緊急事件通報平台</h1>
+    </div>
+  </header>
+
+  <main class="container">
+    <p class="intro">
+      請盡可能詳細填寫以下資訊,以利相關單位快速處理。<br />
+      <strong>若為立即危及生命安全的狀況,請先撥打 110 / 119。</strong>
+    </p>
+
+    <form id="report-form" novalidate>
+      <!-- 事件類型 -->
+      <div class="field">
+        <label for="type">事件類型 <span class="req">*</span></label>
+        <select id="type" name="type" required>
+          <option value="">— 請選擇 —</option>
+          <option value="fire">火災</option>
+          <option value="medical">醫療急救</option>
+          <option value="accident">交通事故</option>
+          <option value="crime">治安/犯罪</option>
+          <option value="disaster">天然災害</option>
+          <option value="infrastructure">公共設施危險</option>
+          <option value="other">其他</option>
+        </select>
+      </div>
+
+      <!-- 緊急程度 -->
+      <div class="field">
+        <label>緊急程度 <span class="req">*</span></label>
+        <div class="severity">
+          <label class="sev sev-high">
+            <input type="radio" name="severity" value="high" required />
+            <span>緊急</span>
+          </label>
+          <label class="sev sev-mid">
+            <input type="radio" name="severity" value="medium" />
+            <span>普通</span>
+          </label>
+          <label class="sev sev-low">
+            <input type="radio" name="severity" value="low" />
+            <span>非緊急</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 地點 -->
+      <div class="field">
+        <label for="location">事件地點 <span class="req">*</span></label>
+        <div class="location-row">
+          <input type="text" id="location" name="location"
+                 placeholder="例如:台北市信義區市府路 1 號" required />
+          <button type="button" id="locate-btn" class="btn-ghost" title="使用目前定位">
+            📍 定位
+          </button>
+        </div>
+        <small id="coords" class="hint"></small>
+      </div>
+
+      <!-- 描述 -->
+      <div class="field">
+        <label for="description">事件描述 <span class="req">*</span></label>
+        <textarea id="description" name="description" rows="4"
+                  placeholder="請描述發生了什麼事、現場狀況、是否有人受傷等" required></textarea>
+      </div>
+
+      <!-- 通報人 -->
+      <div class="field-row">
+        <div class="field">
+          <label for="reporter">通報人姓名</label>
+          <input type="text" id="reporter" name="reporter" placeholder="選填" />
+        </div>
+        <div class="field">
+          <label for="phone">聯絡電話 <span class="req">*</span></label>
+          <input type="tel" id="phone" name="phone"
+                 placeholder="例如:0912-345-678" required />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn-primary">送出通報</button>
+        <button type="reset" class="btn-ghost">清除重填</button>
+      </div>
+    </form>
+
+    <!-- 送出成功訊息 -->
+    <div id="success" class="success hidden">
+      <h2>✅ 通報已送出</h2>
+      <p>您的通報編號為 <strong id="case-id"></strong></p>
+      <p>相關單位將盡快處理,感謝您的協助。</p>
+      <button type="button" id="new-report" class="btn-primary">再通報一筆</button>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <small>緊急事件通報平台 · 原型版本</small>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

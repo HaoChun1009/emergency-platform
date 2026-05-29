@@ -1,0 +1,15 @@
+# 系統檔案
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 編輯器
+.vscode/
+.idea/
+
+# 相依套件 / 建置產物(日後加後端時用得到)
+node_modules/
+dist/
+build/
+*.log
+.env
