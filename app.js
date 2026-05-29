@@ -6,11 +6,8 @@
 const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzYmmlJqgXR4TmoHn2GCi8XBVhRoVxwPBcE0mt_xnjyPEMMudg0qPubA1vOurGpVnQS/exec";
 // ⬆⬆⬆ 部署新版本後端時,記得更新這段網址 ⬆⬆⬆
 
-// 照片上傳開關:
-//   目前後端尚未更新(沒有接收照片的程式),故先設為 false ——
-//   照片仍可在畫面預覽,但不會送到後端,確保送出正常。
-//   待後端更新並重新部署後,把這裡改成 true 即可啟用照片儲存。
-const PHOTO_UPLOAD_ENABLED = false;
+// 照片上傳開關:後端已更新並重新部署(含雲端硬碟儲存),正式啟用。
+const PHOTO_UPLOAD_ENABLED = true;
 
 const form = document.getElementById("report-form");
 const successBox = document.getElementById("success");
