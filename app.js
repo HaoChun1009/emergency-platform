@@ -6,6 +6,12 @@
 const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzYmmlJqgXR4TmoHn2GCi8XBVhRoVxwPBcE0mt_xnjyPEMMudg0qPubA1vOurGpVnQS/exec";
 // ⬆⬆⬆ 部署新版本後端時,記得更新這段網址 ⬆⬆⬆
 
+// 照片上傳開關:
+//   目前後端尚未更新(沒有接收照片的程式),故先設為 false ——
+//   照片仍可在畫面預覽,但不會送到後端,確保送出正常。
+//   待後端更新並重新部署後,把這裡改成 true 即可啟用照片儲存。
+const PHOTO_UPLOAD_ENABLED = false;
+
 const form = document.getElementById("report-form");
 const successBox = document.getElementById("success");
 const caseIdEl = document.getElementById("case-id");
@@ -338,7 +344,7 @@ form.addEventListener("submit", async (e) => {
     details: dynamicData,
     reporter: form.reporter.value.trim(),
     phone: form.phone.value.trim(),
-    photos: selectedPhotos, // [{ name, dataUrl }]
+    photos: PHOTO_UPLOAD_ENABLED ? selectedPhotos : [], // 後端就緒前不送照片
     createdAt: new Date().toISOString(),
     status: "new",
   };
@@ -358,8 +364,11 @@ form.addEventListener("submit", async (e) => {
 
   try {
     if (BACKEND_URL) {
+      // 用 no-cors 送出:請求會送達後端,但瀏覽器基於跨網域規則不讓我們讀回應。
+      // 對「只送資料、不需讀回傳」的情境這樣最穩,不會誤判失敗。
       await fetch(BACKEND_URL, {
         method: "POST",
+        mode: "no-cors",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(data),
       });
