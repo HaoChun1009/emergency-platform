@@ -1,5 +1,10 @@
-// 緊急事件通報平台 — 前端邏輯(原型版)
-// 目前資料暫存於瀏覽器 localStorage,之後可改接後端 API。
+// 緊急事件通報平台 — 前端邏輯
+// 通報資料會送到 Google 試算表後端(透過 Apps Script Web App)。
+// 同時也在瀏覽器 localStorage 留一份備份。
+
+// ⬇⬇⬇ Google Apps Script 後端網址 ⬇⬇⬇
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzYmmlJqgXR4TmoHn2GCi8XBVhRoVxwPBcE0mt_xnjyPEMMudg0qPubA1vOurGpVnQS/exec";
+// ⬆⬆⬆ 部署新版本後端時,記得更新這段網址 ⬆⬆⬆
 
 const form = document.getElementById("report-form");
 const successBox = document.getElementById("success");
@@ -7,6 +12,7 @@ const caseIdEl = document.getElementById("case-id");
 const coordsEl = document.getElementById("coords");
 const locateBtn = document.getElementById("locate-btn");
 const newReportBtn = document.getElementById("new-report");
+const submitBtn = form.querySelector(".btn-primary");
 
 let currentCoords = null; // { lat, lng }
 
@@ -41,10 +47,9 @@ function generateCaseId() {
 }
 
 // 送出表單
-form.addEventListener("submit", (e) => {
+form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  // 原生驗證
   if (!form.checkValidity()) {
     form.reportValidity();
     return;
@@ -63,18 +68,44 @@ form.addEventListener("submit", (e) => {
     status: "new",
   };
 
-  // 暫存到 localStorage(之後改為 fetch POST 到後端)
+  // 在 localStorage 留一份備份
   const reports = JSON.parse(localStorage.getItem("reports") || "[]");
   reports.push(data);
   localStorage.setItem("reports", JSON.stringify(reports));
 
-  // 顯示成功畫面
-  caseIdEl.textContent = data.caseId;
+  // 送到後端
+  submitBtn.disabled = true;
+  submitBtn.textContent = "送出中…";
+
+  try {
+    if (BACKEND_URL) {
+      await fetch(BACKEND_URL, {
+        method: "POST",
+        // 用 text/plain 可避免觸發 CORS 預檢,Apps Script 端會自行 JSON.parse
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(data),
+      });
+    } else {
+      console.warn("尚未設定 BACKEND_URL,資料僅存於本機 localStorage。");
+    }
+    showSuccess(data.caseId);
+  } catch (err) {
+    console.error("送出失敗:", err);
+    // 後端送出失敗,但本機已備份,仍提示成功並保留資料
+    alert("網路傳送發生問題,資料已暫存於本機,請稍後確認網路再試一次。");
+    showSuccess(data.caseId);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "送出通報";
+  }
+});
+
+function showSuccess(caseId) {
+  caseIdEl.textContent = caseId;
   form.classList.add("hidden");
   successBox.classList.remove("hidden");
-
-  console.log("已儲存通報:", data);
-});
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
 
 // 再通報一筆
 newReportBtn.addEventListener("click", () => {
