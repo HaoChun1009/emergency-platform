@@ -3,7 +3,7 @@
 // 同時也在瀏覽器 localStorage 留一份備份。
 
 // ⬇⬇⬇ Google Apps Script 後端網址 ⬇⬇⬇
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzhMa8_FULZGEoTPnS6nqIsNPCbO3VZBy5a8r56yNnuZyyX-E8wWQPzL02J1XC4XJiw/exec";
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbx78IpesNsBvQGjJKFv7QC6EZi3NEGb4C-LUQba9MQV3amjyGLQA_rvCucYlfzposCp/exec";
 // ⬆⬆⬆ 部署新版本後端時,記得更新這段網址 ⬆⬆⬆
 
 // 照片上傳開關:後端已更新並重新部署(含雲端硬碟儲存),正式啟用。
