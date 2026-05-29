@@ -359,6 +359,9 @@ form.addEventListener("submit", async (e) => {
   submitBtn.disabled = true;
   submitBtn.textContent = "送出中…";
 
+  // 版本標記,方便確認瀏覽器是否載入最新程式(對照 console)
+  console.log("送出程式版本:v5 no-cors,照片數:", data.photos.length);
+
   try {
     if (BACKEND_URL) {
       // 用 no-cors 送出:請求會送達後端,但瀏覽器基於跨網域規則不讓我們讀回應。
@@ -375,7 +378,9 @@ form.addEventListener("submit", async (e) => {
     showSuccess(data.caseId);
   } catch (err) {
     console.error("送出失敗:", err);
-    alert("網路傳送發生問題,資料已暫存於本機,請稍後確認網路再試一次。");
+    // 暫時把真正的錯誤內容顯示出來,方便診斷
+    alert("送出發生問題(診斷用):\n" + (err && err.message ? err.message : err) +
+          "\n\n資料已暫存於本機。");
     showSuccess(data.caseId);
   } finally {
     submitBtn.disabled = false;
