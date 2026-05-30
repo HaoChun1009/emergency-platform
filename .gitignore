@@ -6,6 +6,7 @@ Desktop.ini
 # 編輯器
 .vscode/
 .idea/
+.claude/
 
 # 相依套件 / 建置產物(日後加後端時用得到)
 node_modules/
