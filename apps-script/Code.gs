@@ -36,6 +36,12 @@ var HEADERS = [
 // 存放上傳照片的雲端硬碟資料夾名稱
 var PHOTO_FOLDER_NAME = "緊急通報照片";
 
+// 即時通知設定:當 AI 判為「重大災害」時,寄 Email 給承辦。
+// 收件者改放在指令碼屬性 NOTIFY_EMAILS(多筆用逗號分隔),避免把信箱寫進公開程式。
+// 設定方式:Apps Script 左側「專案設定(齒輪)→ 指令碼屬性」新增 NOTIFY_EMAILS。
+// 只有「重大災害」會觸發通知的分級清單(日後要含廠級可加 "廠級事故")。
+var NOTIFY_SEVERITIES = ["重大災害"];
+
 // 使用的 Gemini 模型(免費版,快又輕,適合分級)
 // 依序嘗試:主模型忙碌(503/429)時,自動改用下一個備援模型。
 var GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"];
@@ -112,6 +118,14 @@ function doPost(e) {
       sheet.getRange(row, 1, 1, HEADERS.length).setBackground("#fde2e1");
     }
 
+    // 即時通知:重大災害時寄 Email 給承辦(失敗不影響通報儲存)
+    try {
+      notifyIfNeeded_(data, ai, coords, photoLinks);
+    } catch (notifyErr) {
+      // 通知失敗僅記錄,不讓整筆通報失敗
+      Logger.log("通知寄送失敗:" + notifyErr);
+    }
+
     return jsonOutput_({
       ok: true,
       caseId: data.caseId,
@@ -126,6 +140,66 @@ function doPost(e) {
 // 方便測試:用瀏覽器直接打開網址時會看到這個
 function doGet() {
   return jsonOutput_({ ok: true, message: "緊急通報平台後端運作中" });
+}
+
+/* ============================================================
+   即時通知(重大災害寄 Email)
+   ============================================================ */
+
+// 依 AI 分級判斷是否需通知;需要時寄 Email 給承辦
+function notifyIfNeeded_(data, ai, coords, photoLinks) {
+  // 只有指定分級(預設「重大災害」)才通知
+  if (NOTIFY_SEVERITIES.indexOf(ai.severity) === -1) return;
+
+  var emails = PropertiesService.getScriptProperties().getProperty("NOTIFY_EMAILS");
+  if (!emails) {
+    Logger.log("尚未設定 NOTIFY_EMAILS,略過 Email 通知");
+    return;
+  }
+
+  var typeLabel = TYPE_LABELS[data.type] || data.type || "未指定";
+  var subject = "🔴【重大災害通報】" + typeLabel + " " + (data.caseId || "");
+
+  var bodyLines = [
+    "系統偵測到一筆【重大災害】等級的緊急通報,請立即處理。",
+    "",
+    "通報編號:" + (data.caseId || "—"),
+    "事件類型:" + typeLabel,
+    "AI 研判分級:" + ai.severity,
+    "地點:" + (data.location || "—"),
+    "座標:" + (coords || "—"),
+    "事件描述:" + (data.description || "—"),
+    "聯絡電話:" + (data.phone || "—"),
+    "通報人:" + (data.reporter || "—"),
+    "現場照片:" + (photoLinks && photoLinks.length ? photoLinks.join("  ") : "無"),
+    "",
+    "【AI 處置建議】",
+    ai.guidance || "—",
+    "",
+    "※ 本通知由系統自動發送,AI 研判僅供參考,實際處置請依現場狀況與 SOP 判斷。"
+  ];
+
+  MailApp.sendEmail({
+    to: emails,                       // 多筆收件者用逗號分隔
+    subject: subject,
+    body: bodyLines.join("\n")
+  });
+  Logger.log("已寄送重大災害通知至:" + emails);
+}
+
+// 測試用:在編輯器執行此函式,可驗證 Email 通知是否正常(會用一筆假的重大災害)
+function testNotify() {
+  var sample = {
+    caseId: "ER-TEST-NOTIFY",
+    type: "fire",
+    location: "和平廠 測試地點",
+    description: "測試:儲槽大火延燒、多人受傷、無法控制",
+    phone: "0900-000-000",
+    reporter: "系統測試"
+  };
+  var ai = { severity: "重大災害", guidance: "(測試)請立即通報 119 並啟動應變組織。" };
+  notifyIfNeeded_(sample, ai, "24.0, 121.7", []);
+  Logger.log("testNotify 執行完畢,請檢查收件匣");
 }
 
 /* ============================================================
