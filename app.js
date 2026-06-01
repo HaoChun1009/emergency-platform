@@ -108,8 +108,39 @@ function collectDynamicData() {
 }
 
 /* ============================================================
-   功能 2:定位 + 座標自動轉地址(反向地理編碼)
+   功能 2:定位 + 座標自動轉地址 + 自動判斷廠區
    ============================================================ */
+
+// 廠區清單(日後新增廠區,在此加一行即可)
+// name:廠區名稱;lat/lng:中心座標;radiusKm:判定半徑(公里)
+const PLANTS = [
+  { name: "台泥總處", lat: 25.060732692038076, lng: 121.52320323854713, radiusKm: 5 },
+  { name: "蘇澳廠",   lat: 24.588467741184218, lng: 121.85271529537127, radiusKm: 5 },
+  { name: "和平廠",   lat: 24.303298283183537, lng: 121.75188570645906, radiusKm: 5 },
+];
+
+// 計算兩個座標間的距離(公里),Haversine 公式
+function distanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371; // 地球半徑(公里)
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// 找出座標所在(或最近且在判定半徑內)的廠區;找不到回傳 null
+function detectPlant(lat, lng) {
+  let best = null;
+  for (const p of PLANTS) {
+    const d = distanceKm(lat, lng, p.lat, p.lng);
+    if (d <= p.radiusKm && (!best || d < best.dist)) {
+      best = { name: p.name, dist: d };
+    }
+  }
+  return best;
+}
 
 locateBtn.addEventListener("click", () => {
   if (!navigator.geolocation) {
@@ -121,14 +152,26 @@ locateBtn.addEventListener("click", () => {
     async (pos) => {
       const { latitude, longitude } = pos.coords;
       currentCoords = { lat: latitude, lng: longitude };
+
+      // 自動判斷廠區:5 公里內最近的廠區自動填入「廠區」欄(仍可手動修改)
+      const plant = detectPlant(latitude, longitude);
+      const plantInput = document.getElementById("plant");
+      let plantMsg = "";
+      if (plant && !plantInput.value.trim()) {
+        plantInput.value = plant.name;
+        plantMsg = ` · 🏭 ${plant.name}`;
+      } else if (!plant) {
+        plantMsg = " · 不在已知廠區範圍(請手動填廠區)";
+      }
+
       coordsEl.textContent = `已取得座標:${latitude.toFixed(5)}, ${longitude.toFixed(5)},查詢地址中…`;
       const address = await reverseGeocode(latitude, longitude);
       if (address) {
         const locInput = document.getElementById("location");
         if (!locInput.value.trim()) locInput.value = address;
-        coordsEl.textContent = `📍 ${address}(${latitude.toFixed(5)}, ${longitude.toFixed(5)})`;
+        coordsEl.textContent = `📍 ${address}(${latitude.toFixed(5)}, ${longitude.toFixed(5)})${plantMsg}`;
       } else {
-        coordsEl.textContent = `已取得座標:${latitude.toFixed(5)}, ${longitude.toFixed(5)}(地址查詢失敗,請手動填寫)`;
+        coordsEl.textContent = `已取得座標:${latitude.toFixed(5)}, ${longitude.toFixed(5)}(地址查詢失敗,請手動填寫)${plantMsg}`;
       }
     },
     (err) => {
