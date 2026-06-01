@@ -116,7 +116,7 @@ locateBtn.addEventListener("click", () => {
     coordsEl.textContent = "此瀏覽器不支援定位功能。";
     return;
   }
-  coordsEl.textContent = "定位中…";
+  coordsEl.textContent = "定位中…(請允許瀏覽器存取位置)";
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       const { latitude, longitude } = pos.coords;
@@ -132,7 +132,27 @@ locateBtn.addEventListener("click", () => {
       }
     },
     (err) => {
-      coordsEl.textContent = "無法取得定位:" + err.message;
+      // 依錯誤代碼給出明確中文提示與解決方式
+      let msg;
+      switch (err.code) {
+        case err.PERMISSION_DENIED:
+          msg = "定位權限被拒。iPhone 請到「設定 → Chrome → 位置」開啟,並確認「設定 → 隱私權與安全性 → 定位服務」為開啟,再重試。";
+          break;
+        case err.POSITION_UNAVAILABLE:
+          msg = "目前無法取得位置(可能室內收訊不佳)。請移動到收訊較好處,或手動輸入地點。";
+          break;
+        case err.TIMEOUT:
+          msg = "定位逾時,請再按一次「定位」,或手動輸入地點。";
+          break;
+        default:
+          msg = "無法取得定位:" + (err.message || "未知原因") + "。可手動輸入地點。";
+      }
+      coordsEl.textContent = "⚠️ " + msg;
+    },
+    {
+      enableHighAccuracy: true, // 盡量用 GPS 取得較精確位置
+      timeout: 15000,           // 最多等 15 秒
+      maximumAge: 0             // 不使用快取的舊位置
     }
   );
 });
