@@ -172,7 +172,8 @@ function notifyIfNeeded_(data, ai, coords, photoLinks) {
   var typeLabel = TYPE_LABELS[data.type] || data.type || "未指定";
   var subject = "🔴【重大災害通報】" + typeLabel + " " + (data.caseId || "");
 
-  var bodyLines = [
+  // 純文字備援版(收件軟體不支援 HTML 時顯示)
+  var plainLines = [
     "系統偵測到一筆【重大災害】等級的緊急通報,請立即處理。",
     "",
     "通報編號:" + (data.caseId || "—"),
@@ -191,10 +192,65 @@ function notifyIfNeeded_(data, ai, coords, photoLinks) {
     "※ 本通知由系統自動發送,AI 研判僅供參考,實際處置請依現場狀況與 SOP 判斷。"
   ];
 
+  // 把通報照片(前端送來的 dataUrl)轉成內嵌圖片
+  var inlineImages = {};
+  var imgTagsHtml = "";
+  if (data.photos && data.photos.length) {
+    for (var i = 0; i < data.photos.length; i++) {
+      try {
+        var dataUrl = data.photos[i].dataUrl;
+        var comma = dataUrl.indexOf(",");
+        if (comma < 0) continue;
+        var meta = dataUrl.substring(0, comma);
+        var b64 = dataUrl.substring(comma + 1);
+        var mime = meta.substring(meta.indexOf(":") + 1, meta.indexOf(";")) || "image/jpeg";
+        var cid = "photo" + i;
+        inlineImages[cid] = Utilities.newBlob(Utilities.base64Decode(b64), mime, cid + ".jpg");
+        imgTagsHtml += '<img src="cid:' + cid + '" style="max-width:320px;border:1px solid #ccc;' +
+                       'border-radius:6px;margin:6px 8px 6px 0;">';
+      } catch (imgErr) {
+        // 單張失敗略過,不影響其他內容
+      }
+    }
+  }
+
+  // HTML 版內文(保持簡單排版,僅加照片)
+  function esc(s) {
+    return String(s == null ? "—" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/\n/g, "<br>");
+  }
+  var photoSectionHtml = imgTagsHtml
+    ? "<p><b>現場照片:</b></p><div>" + imgTagsHtml + "</div>"
+    : "<p><b>現場照片:</b>無</p>";
+
+  var htmlBody =
+    '<div style="font-family:\'Microsoft JhengHei\',Arial,sans-serif;font-size:14px;line-height:1.7;color:#222;">' +
+    '<p style="font-size:16px;"><b>系統偵測到一筆【重大災害】等級的緊急通報,請立即處理。</b></p>' +
+    "<p>" +
+    "<b>通報編號:</b>" + esc(data.caseId) + "<br>" +
+    "<b>事件類型:</b>" + esc(typeLabel) + "<br>" +
+    "<b>AI 研判分級:</b><span style=\"color:#d92d20;font-weight:bold;\">" + esc(ai.severity) + "</span><br>" +
+    "<b>地點:</b>" + esc(data.location) + "<br>" +
+    "<b>座標:</b>" + esc(coords) + "<br>" +
+    "<b>事件描述:</b>" + esc(data.description) + "<br>" +
+    "<b>聯絡電話:</b>" + esc(data.phone) + "<br>" +
+    "<b>通報人:</b>" + esc(data.reporter) +
+    "</p>" +
+    photoSectionHtml +
+    "<p><b>【AI 處置建議】</b><br>" + esc(ai.guidance) + "</p>" +
+    '<p style="color:#888;font-size:12px;">※ 本通知由系統自動發送,AI 研判僅供參考,實際處置請依現場狀況與 SOP 判斷。</p>' +
+    (photoLinks && photoLinks.length
+      ? '<p style="font-size:12px;">原始照片連結:' + photoLinks.join("  ") + "</p>"
+      : "") +
+    "</div>";
+
   MailApp.sendEmail({
     to: emails,                       // 多筆收件者用逗號分隔
     subject: subject,
-    body: bodyLines.join("\n")
+    body: plainLines.join("\n"),      // 純文字備援
+    htmlBody: htmlBody,
+    inlineImages: inlineImages
   });
   return "✅ 已通知(Email,當下剩餘額度 " + (remaining - 1) + ")";
 }
