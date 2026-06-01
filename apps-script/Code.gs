@@ -119,11 +119,17 @@ function doPost(e) {
     }
 
     // 即時通知:重大災害時寄 Email 給承辦(失敗不影響通報儲存)
+    // 通知結果寫進「狀態」欄,方便直接在試算表看到有沒有成功通知。
+    var notifyResult = "";
     try {
-      notifyIfNeeded_(data, ai, coords, photoLinks);
+      notifyResult = notifyIfNeeded_(data, ai, coords, photoLinks);
     } catch (notifyErr) {
-      // 通知失敗僅記錄,不讓整筆通報失敗
-      Logger.log("通知寄送失敗:" + notifyErr);
+      notifyResult = "通知失敗:" + notifyErr;
+    }
+    if (notifyResult) {
+      var statusRow = sheet.getLastRow();
+      var statusCol = HEADERS.indexOf("狀態") + 1;
+      sheet.getRange(statusRow, statusCol).setValue(notifyResult);
     }
 
     return jsonOutput_({
@@ -146,15 +152,21 @@ function doGet() {
    即時通知(重大災害寄 Email)
    ============================================================ */
 
-// 依 AI 分級判斷是否需通知;需要時寄 Email 給承辦
+// 依 AI 分級判斷是否需通知;需要時寄 Email 給承辦。
+// 回傳一段「狀態文字」寫回試算表狀態欄,讓寄信結果在試算表就看得到。
 function notifyIfNeeded_(data, ai, coords, photoLinks) {
-  // 只有指定分級(預設「重大災害」)才通知
-  if (NOTIFY_SEVERITIES.indexOf(ai.severity) === -1) return;
+  // 只有指定分級(預設「重大災害」)才通知;其他分級回傳空字串(狀態欄維持原值)
+  if (NOTIFY_SEVERITIES.indexOf(ai.severity) === -1) return "";
 
   var emails = PropertiesService.getScriptProperties().getProperty("NOTIFY_EMAILS");
   if (!emails) {
-    Logger.log("尚未設定 NOTIFY_EMAILS,略過 Email 通知");
-    return;
+    return "⚠️ 未設定通知信箱(NOTIFY_EMAILS)";
+  }
+
+  // 先檢查今日剩餘額度,額度不足時明確標示(這是「真實通報沒收到信」最常見的原因)
+  var remaining = MailApp.getRemainingDailyQuota();
+  if (remaining <= 0) {
+    return "⚠️ Email 今日額度用罄,未送出(建議改用 LINE)";
   }
 
   var typeLabel = TYPE_LABELS[data.type] || data.type || "未指定";
@@ -184,7 +196,7 @@ function notifyIfNeeded_(data, ai, coords, photoLinks) {
     subject: subject,
     body: bodyLines.join("\n")
   });
-  Logger.log("已寄送重大災害通知至:" + emails);
+  return "✅ 已通知(Email,當下剩餘額度 " + (remaining - 1) + ")";
 }
 
 // 測試用:在編輯器執行此函式,可驗證 Email 通知是否正常(會用一筆假的重大災害)
@@ -200,6 +212,16 @@ function testNotify() {
   var ai = { severity: "重大災害", guidance: "(測試)請立即通報 119 並啟動應變組織。" };
   notifyIfNeeded_(sample, ai, "24.0, 121.7", []);
   Logger.log("testNotify 執行完畢,請檢查收件匣");
+}
+
+// 查詢今日 Email 剩餘額度:在編輯器執行此函式,結果會跳出對話框 + 寫在執行紀錄
+function checkEmailQuota() {
+  var remaining = MailApp.getRemainingDailyQuota();
+  var msg = "今日 Email 剩餘可寄送封數:" + remaining;
+  Logger.log(msg);
+  // 也記到指令碼屬性,方便事後查
+  PropertiesService.getScriptProperties().setProperty("LAST_EMAIL_QUOTA", String(remaining));
+  return msg;
 }
 
 /* ============================================================
