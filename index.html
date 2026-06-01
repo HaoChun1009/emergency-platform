@@ -21,7 +21,20 @@
     </p>
 
     <form id="report-form" novalidate>
-      <!-- 廠區 -->
+      <!-- 事件地點(含定位,定位後會自動帶出下方廠區) -->
+      <div class="field">
+        <label for="location">事件地點 <span class="req">*</span></label>
+        <div class="location-row">
+          <input type="text" id="location" name="location"
+                 placeholder="例如:台北市信義區市府路 1 號" required />
+          <button type="button" id="locate-btn" class="btn-ghost" title="使用目前定位">
+            📍 定位
+          </button>
+        </div>
+        <small id="coords" class="hint"></small>
+      </div>
+
+      <!-- 廠區(可由定位自動帶入,亦可手動修改) -->
       <div class="field">
         <label for="plant">廠區 <span class="req">*</span></label>
         <input type="text" id="plant" name="plant"
@@ -63,19 +76,6 @@
             <span>非緊急</span>
           </label>
         </div>
-      </div>
-
-      <!-- 地點 -->
-      <div class="field">
-        <label for="location">事件地點 <span class="req">*</span></label>
-        <div class="location-row">
-          <input type="text" id="location" name="location"
-                 placeholder="例如:台北市信義區市府路 1 號" required />
-          <button type="button" id="locate-btn" class="btn-ghost" title="使用目前定位">
-            📍 定位
-          </button>
-        </div>
-        <small id="coords" class="hint"></small>
       </div>
 
       <!-- 描述 -->
