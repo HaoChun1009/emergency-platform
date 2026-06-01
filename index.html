@@ -21,6 +21,13 @@
     </p>
 
     <form id="report-form" novalidate>
+      <!-- 廠區 -->
+      <div class="field">
+        <label for="plant">廠區 <span class="req">*</span></label>
+        <input type="text" id="plant" name="plant"
+               placeholder="例如:和平廠" required />
+      </div>
+
       <!-- 事件類型 -->
       <div class="field">
         <label for="type">事件類型 <span class="req">*</span></label>
@@ -96,8 +103,8 @@
       <!-- 通報人 -->
       <div class="field-row">
         <div class="field">
-          <label for="reporter">通報人姓名</label>
-          <input type="text" id="reporter" name="reporter" placeholder="選填" />
+          <label for="reporter">通報人姓名 <span class="req">*</span></label>
+          <input type="text" id="reporter" name="reporter" placeholder="請填寫您的姓名" required />
         </div>
         <div class="field">
           <label for="phone">聯絡電話 <span class="req">*</span></label>

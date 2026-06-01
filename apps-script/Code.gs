@@ -30,7 +30,7 @@
 var HEADERS = [
   "送出時間", "通報編號", "事件類型", "緊急程度",
   "地點", "座標", "事件描述", "通報人", "聯絡電話", "現場照片", "狀態",
-  "AI分級", "AI處置建議"
+  "AI分級", "AI處置建議", "廠區"
 ];
 
 // 存放上傳照片的雲端硬碟資料夾名稱
@@ -109,7 +109,8 @@ function doPost(e) {
       photoLinks.join("\n"),
       data.status || "new",
       ai.severity,
-      ai.guidance
+      ai.guidance,
+      data.plant || ""
     ]);
 
     // 若 AI 全部失敗、需人工判級,把該列整列標成淺紅,讓承辦一眼看到
@@ -170,13 +171,17 @@ function notifyIfNeeded_(data, ai, coords, photoLinks) {
   }
 
   var typeLabel = TYPE_LABELS[data.type] || data.type || "未指定";
-  var subject = "🔴【重大災害通報】" + typeLabel + " " + (data.caseId || "");
+  var plant = data.plant || "未填廠區";
+  var reporter = data.reporter || "未具名";
+  // 標題格式:🔴【重大災害通報】XX廠火災_由OOO通報
+  var subject = "🔴【重大災害通報】" + plant + typeLabel + "_由" + reporter + "通報";
 
   // 純文字備援版(收件軟體不支援 HTML 時顯示)
   var plainLines = [
     "系統偵測到一筆【重大災害】等級的緊急通報,請立即處理。",
     "",
     "通報編號:" + (data.caseId || "—"),
+    "廠區:" + plant,
     "事件類型:" + typeLabel,
     "AI 研判分級:" + ai.severity,
     "地點:" + (data.location || "—"),
@@ -229,6 +234,7 @@ function notifyIfNeeded_(data, ai, coords, photoLinks) {
     '<p style="font-size:16px;"><b>系統偵測到一筆【重大災害】等級的緊急通報,請立即處理。</b></p>' +
     "<p>" +
     "<b>通報編號:</b>" + esc(data.caseId) + "<br>" +
+    "<b>廠區:</b>" + esc(plant) + "<br>" +
     "<b>事件類型:</b>" + esc(typeLabel) + "<br>" +
     "<b>AI 研判分級:</b><span style=\"color:#d92d20;font-weight:bold;\">" + esc(ai.severity) + "</span><br>" +
     "<b>地點:</b>" + esc(data.location) + "<br>" +

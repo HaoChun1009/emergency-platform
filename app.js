@@ -353,6 +353,7 @@ form.addEventListener("submit", async (e) => {
 
   const data = {
     caseId: generateCaseId(),
+    plant: form.plant.value.trim(),
     type: form.type.value,
     severity: form.severity.value,
     location: form.location.value.trim(),
