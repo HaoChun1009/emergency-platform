@@ -158,17 +158,41 @@ locateBtn.addEventListener("click", () => {
 });
 
 // 用 OpenStreetMap Nominatim 把座標轉成地址(免費、免金鑰)
+// 只取結構化欄位重組成「市區路門牌」的簡潔地址,去除別名、里、郵遞區號、國家等雜訊。
 async function reverseGeocode(lat, lng) {
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=zh-TW`;
     const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) return null;
     const data = await res.json();
-    return data.display_name || null;
+    return formatAddress(data) || data.display_name || null;
   } catch (err) {
     console.warn("反向地理編碼失敗:", err);
     return null;
   }
+}
+
+// 從 Nominatim 的結構化 address 物件,組出「市 + 區 + 路 + 門牌」的簡潔地址
+function formatAddress(data) {
+  const a = data && data.address;
+  if (!a) return null;
+
+  // 直轄市/縣市(不同地點欄位名稱可能不同,依序取第一個有值的)
+  const city = a.city || a.county || a.state || a.town || "";
+  // 行政區(區/鄉/鎮)
+  const district = a.city_district || a.district || a.suburb ||
+                   a.town || a.township || "";
+  // 路 / 街
+  const road = a.road || a.pedestrian || a.neighbourhood || "";
+  // 門牌號(Nominatim 多半放在 house_number)
+  const houseNumber = a.house_number ? a.house_number + "號" : "";
+
+  // 依台灣習慣由大到小串接,去重、去空白
+  const parts = [city, district, road, houseNumber].filter(Boolean);
+  // 移除相鄰重複(例如 city 與 district 取到同一值)
+  const dedup = parts.filter((v, i) => i === 0 || v !== parts[i - 1]);
+  const result = dedup.join("");
+  return result || null;
 }
 
 /* ============================================================
