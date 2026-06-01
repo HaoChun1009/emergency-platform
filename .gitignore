@@ -14,3 +14,8 @@ dist/
 build/
 *.log
 .env
+
+# 含個資/內部資訊的文件,不上傳公開 repo
+*.pdf
+和平火災SOP*
+SOP知識庫內容_貼到試算表用.txt

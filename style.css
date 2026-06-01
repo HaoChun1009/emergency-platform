@@ -316,6 +316,7 @@ textarea { resize: vertical; }
   color: #fff;
 }
 .ai-badge.major { background: var(--red); }
+.ai-badge.mid { background: var(--orange); }
 .ai-badge.normal { background: var(--green); }
 .ai-badge.unknown { background: var(--gray-500); }
 

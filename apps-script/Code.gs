@@ -39,6 +39,31 @@ var PHOTO_FOLDER_NAME = "緊急通報照片";
 // 使用的 Gemini 模型(免費版,快又輕,適合分級)
 var GEMINI_MODEL = "gemini-2.5-flash";
 
+// RAG 知識庫:存放 SOP 的試算表分頁名稱
+// 此分頁不會公開(只在你的 Google 試算表內),程式只負責讀取。
+// 分頁格式:A 欄=事件類型代碼(fire/medical…),B 欄=該類型的 SOP 內容文字。
+var KNOWLEDGE_SHEET_NAME = "SOP知識庫";
+
+// 從試算表「SOP知識庫」分頁讀取指定事件類型的 SOP 內容
+// 找不到分頁或該類型時回傳空字串(AI 會退回一般性判斷)
+function getKnowledge_(type) {
+  if (!type) return "";
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(KNOWLEDGE_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 1) return "";
+    var values = sheet.getRange(1, 1, sheet.getLastRow(), 2).getValues();
+    for (var i = 0; i < values.length; i++) {
+      if (String(values[i][0]).trim() === type) {
+        return String(values[i][1] || "").trim();
+      }
+    }
+    return "";
+  } catch (err) {
+    return "";
+  }
+}
+
 // 代碼轉中文
 var TYPE_LABELS = {
   fire: "火災", medical: "醫療急救", accident: "交通事故",
@@ -124,7 +149,7 @@ function analyzeWithGemini_(data) {
         responseSchema: {
           type: "OBJECT",
           properties: {
-            severity: { type: "STRING", enum: ["重大", "一般"] },
+            severity: { type: "STRING", enum: ["重大災害", "廠級事故", "一般事故"] },
             guidance: { type: "STRING" }
           },
           required: ["severity", "guidance"]
@@ -159,27 +184,51 @@ function analyzeWithGemini_(data) {
   }
 }
 
-// 組合給 Gemini 的提示詞
+// 組合給 Gemini 的提示詞(含 RAG 知識庫:依事件類型帶入對應 SOP)
 function buildPrompt_(data) {
   var typeLabel = TYPE_LABELS[data.type] || data.type || "未指定";
   var sevLabel = SEVERITY_LABELS[data.severity] || data.severity || "未指定";
   var hasPhotos = !!(data.photos && data.photos.length);
-  return [
-    "你是緊急事件通報的分析助理。請根據以下通報內容,判斷事件嚴重程度,並提供給承辦人員的初步處置建議。",
-    "",
-    "【通報資訊】",
-    "事件類型:" + typeLabel,
-    "通報人自評緊急程度:" + sevLabel,
-    "地點:" + (data.location || "未提供"),
-    "事件描述:" + (data.description || "未提供"),
-    "",
-    "【分析要求】",
-    "1. severity:綜合判斷此事件屬於「重大」或「一般」。涉及生命安全、火勢蔓延、多人傷亡、大範圍影響等情況判為「重大」。",
-    "2. guidance:給承辦人員的初步處置建議,2-4 句,具體、可執行,使用繁體中文。",
-    "",
-    (hasPhotos ? "※ 通報附有現場照片,請一併參考照片中的實際災情(如火勢、煙霧、淹水、受損程度等)輔助判斷。" : ""),
-    "注意:你的判斷僅供輔助參考,重大事件仍須人工複核。"
-  ].join("\n");
+
+  // RAG 檢索:依事件類型從試算表「SOP知識庫」分頁取出對應 SOP
+  var knowledge = getKnowledge_(data.type);
+
+  var lines = [
+    "你是台泥和平廠緊急事件通報的分析助理。請『嚴格依據下方公司應變指引(SOP)』判斷事件分級,並提供初步處置建議。"
+  ];
+
+  if (knowledge) {
+    lines.push("");
+    lines.push("===== 公司應變指引(SOP)=====");
+    lines.push(knowledge);
+    lines.push("===== 指引結束 =====");
+  }
+
+  lines.push("");
+  lines.push("【本次通報資訊】");
+  lines.push("事件類型:" + typeLabel);
+  lines.push("通報人自評緊急程度:" + sevLabel);
+  lines.push("地點:" + (data.location || "未提供"));
+  lines.push("事件描述:" + (data.description || "未提供"));
+  lines.push("");
+  lines.push("【分析要求】");
+
+  if (knowledge) {
+    lines.push("1. severity:請『依上方 SOP 的三級分級標準』判定為「重大災害」「廠級事故」或「一般事故」其中之一。務必對照 SOP 的判定條件(例如受傷人數、是否可控、是否需外部救援)。");
+    lines.push("2. guidance:依 SOP 的應變流程與通報原則,給承辦/現場人員的初步處置建議,2-4 句,具體可執行,使用繁體中文。若 SOP 有對應步驟(如通報 119、切斷電源、疏散方向等),請具體引用。");
+  } else {
+    // 尚無此類型 SOP 時,退回一般性判斷
+    lines.push("1. severity:此事件類型尚無對應 SOP,請依常理判定為「重大災害」「廠級事故」或「一般事故」其中之一(涉及人員傷亡或不可控判為重大)。");
+    lines.push("2. guidance:給承辦人員的初步處置建議,2-4 句,具體、可執行,使用繁體中文。");
+  }
+
+  lines.push("");
+  if (hasPhotos) {
+    lines.push("※ 通報附有現場照片,請一併參考照片中的實際災情(如火勢、煙霧、淹水、受損程度等)輔助判斷。");
+  }
+  lines.push("注意:你的判斷僅供輔助參考,重大事件仍須人工複核。");
+
+  return lines.join("\n");
 }
 
 // 把通報照片(dataURL)轉成 Gemini 接受的 inline_data 格式

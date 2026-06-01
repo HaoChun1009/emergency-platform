@@ -422,8 +422,12 @@ function showAiFeedback(ai) {
   const guidance = ai && ai.guidance ? ai.guidance : "";
 
   severityEl.textContent = severity || "無法判定";
-  severityEl.className = "ai-badge " +
-    (severity === "重大" ? "major" : severity === "一般" ? "normal" : "unknown");
+  // 三級分級對應顏色:重大災害=紅、廠級事故=橘、一般事故=綠
+  let sevClass = "unknown";
+  if (severity === "重大災害") sevClass = "major";
+  else if (severity === "廠級事故") sevClass = "mid";
+  else if (severity === "一般事故") sevClass = "normal";
+  severityEl.className = "ai-badge " + sevClass;
 
   guidanceEl.textContent = guidance || "(目前無建議內容)";
 }
