@@ -3,7 +3,8 @@
  *
  * 用途:接收前端網頁送來的通報資料,寫入這份試算表;
  *       現場照片會存到 Google 雲端硬碟,並在試算表填入連結;
- *       新通報進來時,呼叫 Gemini 免費 API 自動分析「分級」與「處置建議」,寫回試算表。
+ *       新通報進來時,呼叫 Gemini 免費 API 自動分析「分級」與「處置建議」,寫回試算表;
+ *       若通報附有現場照片,會一併將照片送給 Gemini(多模態)輔助辨識災情。
  *
  * ⚠️ 更新程式後,務必「重新部署」才會生效:
  *      部署 → 管理部署作業 → 編輯(鉛筆)→ 版本選「新版本」→ 部署
@@ -107,8 +108,15 @@ function analyzeWithGemini_(data) {
     var url = "https://generativelanguage.googleapis.com/v1beta/models/" +
               GEMINI_MODEL + ":generateContent?key=" + apiKey;
 
+    // 組合 parts:第一段是文字提示,接著把現場照片一起送給 Gemini 辨識
+    var parts = [{ text: buildPrompt_(data) }];
+    var imageParts = buildImageParts_(data.photos);
+    for (var p = 0; p < imageParts.length; p++) {
+      parts.push(imageParts[p]);
+    }
+
     var payload = {
-      contents: [{ parts: [{ text: buildPrompt_(data) }] }],
+      contents: [{ parts: parts }],
       generationConfig: {
         temperature: 0.2,
         // 要求 Gemini 直接輸出符合結構的 JSON,免去字串解析的麻煩
@@ -155,6 +163,7 @@ function analyzeWithGemini_(data) {
 function buildPrompt_(data) {
   var typeLabel = TYPE_LABELS[data.type] || data.type || "未指定";
   var sevLabel = SEVERITY_LABELS[data.severity] || data.severity || "未指定";
+  var hasPhotos = !!(data.photos && data.photos.length);
   return [
     "你是緊急事件通報的分析助理。請根據以下通報內容,判斷事件嚴重程度,並提供給承辦人員的初步處置建議。",
     "",
@@ -168,8 +177,32 @@ function buildPrompt_(data) {
     "1. severity:綜合判斷此事件屬於「重大」或「一般」。涉及生命安全、火勢蔓延、多人傷亡、大範圍影響等情況判為「重大」。",
     "2. guidance:給承辦人員的初步處置建議,2-4 句,具體、可執行,使用繁體中文。",
     "",
+    (hasPhotos ? "※ 通報附有現場照片,請一併參考照片中的實際災情(如火勢、煙霧、淹水、受損程度等)輔助判斷。" : ""),
     "注意:你的判斷僅供輔助參考,重大事件仍須人工複核。"
   ].join("\n");
+}
+
+// 把通報照片(dataURL)轉成 Gemini 接受的 inline_data 格式
+// 限制送出的張數與大小,避免超過免費額度或請求過大
+function buildImageParts_(photos) {
+  var parts = [];
+  if (!photos || !photos.length) return parts;
+
+  var MAX_IMAGES = 3; // 最多送 3 張給 AI 分析(其餘仍會存檔,只是不分析)
+  for (var i = 0; i < photos.length && i < MAX_IMAGES; i++) {
+    try {
+      var dataUrl = photos[i].dataUrl;
+      var comma = dataUrl.indexOf(",");
+      if (comma < 0) continue;
+      var meta = dataUrl.substring(0, comma); // data:image/jpeg;base64
+      var base64 = dataUrl.substring(comma + 1);
+      var mime = meta.substring(meta.indexOf(":") + 1, meta.indexOf(";")) || "image/jpeg";
+      parts.push({ inline_data: { mime_type: mime, data: base64 } });
+    } catch (err) {
+      // 單張照片處理失敗就略過,不影響其他張與文字分析
+    }
+  }
+  return parts;
 }
 
 // 測試用:在編輯器選此函式按「執行」,可驗證金鑰與 API 是否正常(結果看「執行紀錄」)
