@@ -157,19 +157,28 @@ function analyzeWithGemini_(data) {
       }
     };
 
-    var res = UrlFetchApp.fetch(url, {
+    // 自動重試:免費模型遇到高負載(503/429/500)時,稍候重試最多 3 次
+    var options = {
       method: "post",
       contentType: "application/json",
       payload: JSON.stringify(payload),
       muteHttpExceptions: true
-    });
+    };
+    var res, code;
+    var MAX_TRIES = 3;
+    for (var t = 0; t < MAX_TRIES; t++) {
+      res = UrlFetchApp.fetch(url, options);
+      code = res.getResponseCode();
+      // 成功,或遇到非「暫時性」錯誤就不再重試
+      if (code === 200 || (code !== 503 && code !== 429 && code !== 500)) break;
+      if (t < MAX_TRIES - 1) Utilities.sleep(1500 * (t + 1)); // 1.5s、3s 漸進等待
+    }
 
-    var code = res.getResponseCode();
     if (code !== 200) {
-      return {
-        severity: "",
-        guidance: "(AI 分析失敗 HTTP " + code + ":" + res.getContentText().slice(0, 200) + ")"
-      };
+      var hint = (code === 503 || code === 429)
+        ? "(AI 服務暫時忙碌,稍後會恢復;此筆未自動分級,可稍後人工於試算表補判)"
+        : "(AI 分析失敗 HTTP " + code + ":" + res.getContentText().slice(0, 150) + ")";
+      return { severity: "", guidance: hint };
     }
 
     var json = JSON.parse(res.getContentText());
