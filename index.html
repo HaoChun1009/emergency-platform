@@ -117,6 +117,27 @@
       <h2>✅ 通報已送出</h2>
       <p>您的通報編號為 <strong id="case-id"></strong></p>
       <p>相關單位將盡快處理,感謝您的協助。</p>
+
+      <!-- AI 即時回饋區塊 -->
+      <div id="ai-feedback" class="ai-feedback hidden">
+        <div class="ai-feedback-head">
+          <span class="ai-icon">🤖</span>
+          <span>AI 智能初步研判</span>
+        </div>
+        <div id="ai-loading" class="ai-loading">分析中,請稍候…</div>
+        <div id="ai-result" class="ai-result hidden">
+          <div class="ai-severity-row">
+            <span class="ai-label">研判分級</span>
+            <span id="ai-severity" class="ai-badge"></span>
+          </div>
+          <div class="ai-guidance-row">
+            <span class="ai-label">處置建議</span>
+            <p id="ai-guidance" class="ai-guidance"></p>
+          </div>
+          <small class="ai-note">※ 以上為 AI 自動研判,僅供參考,實際處置仍以相關單位為準。</small>
+        </div>
+      </div>
+
       <button type="button" id="new-report" class="btn-primary">再通報一筆</button>
     </div>
   </main>

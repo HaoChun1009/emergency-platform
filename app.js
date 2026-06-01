@@ -379,28 +379,26 @@ form.addEventListener("submit", async (e) => {
   submitBtn.disabled = true;
   submitBtn.textContent = "送出中…";
 
-  // 版本標記,方便確認瀏覽器是否載入最新程式(對照 console)
-  console.log("送出程式版本:v5 no-cors,照片數:", data.photos.length);
-
   try {
     if (BACKEND_URL) {
-      // 用 no-cors 送出:請求會送達後端,但瀏覽器基於跨網域規則不讓我們讀回應。
-      // 對「只送資料、不需讀回傳」的情境這樣最穩,不會誤判失敗。
-      await fetch(BACKEND_URL, {
+      // 用一般模式送出,讓前端能讀取後端回傳的 AI 分析結果。
+      // Apps Script 部署為「任何人」時,回應為簡單請求,可正常讀取。
+      const res = await fetch(BACKEND_URL, {
         method: "POST",
-        mode: "no-cors",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(data),
       });
+      const result = await res.json();
+      showSuccess(data.caseId);
+      // 後端回傳的 ai 物件:{ severity, guidance }
+      showAiFeedback(result && result.ai ? result.ai : null);
     } else {
       console.warn("尚未設定 BACKEND_URL,資料僅存於本機 localStorage。");
+      showSuccess(data.caseId);
     }
-    showSuccess(data.caseId);
   } catch (err) {
     console.error("送出失敗:", err);
-    // 暫時把真正的錯誤內容顯示出來,方便診斷
-    alert("送出發生問題(診斷用):\n" + (err && err.message ? err.message : err) +
-          "\n\n資料已暫存於本機。");
+    alert("網路傳送發生問題,資料已暫存於本機,請稍後確認網路再試一次。");
     showSuccess(data.caseId);
   } finally {
     submitBtn.disabled = false;
@@ -408,8 +406,37 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
+// 顯示 AI 研判結果(severity:重大/一般;guidance:處置建議)
+function showAiFeedback(ai) {
+  const box = document.getElementById("ai-feedback");
+  const loading = document.getElementById("ai-loading");
+  const resultEl = document.getElementById("ai-result");
+  const severityEl = document.getElementById("ai-severity");
+  const guidanceEl = document.getElementById("ai-guidance");
+
+  box.classList.remove("hidden");
+  loading.classList.add("hidden");
+  resultEl.classList.remove("hidden");
+
+  const severity = ai && ai.severity ? ai.severity : "";
+  const guidance = ai && ai.guidance ? ai.guidance : "";
+
+  severityEl.textContent = severity || "無法判定";
+  severityEl.className = "ai-badge " +
+    (severity === "重大" ? "major" : severity === "一般" ? "normal" : "unknown");
+
+  guidanceEl.textContent = guidance || "(目前無建議內容)";
+}
+
 function showSuccess(caseId) {
   caseIdEl.textContent = caseId;
+  // 先把 AI 區塊重設為「分析中」狀態(等回應到了再由 showAiFeedback 填入)
+  const box = document.getElementById("ai-feedback");
+  const loading = document.getElementById("ai-loading");
+  const resultEl = document.getElementById("ai-result");
+  box.classList.remove("hidden");
+  loading.classList.remove("hidden");
+  resultEl.classList.add("hidden");
   form.classList.add("hidden");
   successBox.classList.remove("hidden");
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -423,6 +450,7 @@ newReportBtn.addEventListener("click", () => {
   coordsEl.textContent = "";
   voiceStatus.textContent = "";
   dynamicFields.innerHTML = "";
+  document.getElementById("ai-feedback").classList.add("hidden");
   successBox.classList.add("hidden");
   form.classList.remove("hidden");
   window.scrollTo({ top: 0, behavior: "smooth" });
