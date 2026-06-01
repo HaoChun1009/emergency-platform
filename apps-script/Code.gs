@@ -37,7 +37,11 @@ var HEADERS = [
 var PHOTO_FOLDER_NAME = "緊急通報照片";
 
 // 使用的 Gemini 模型(免費版,快又輕,適合分級)
-var GEMINI_MODEL = "gemini-2.5-flash";
+// 依序嘗試:主模型忙碌(503/429)時,自動改用下一個備援模型。
+var GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"];
+
+// 標記「需人工判級」的提示文字(兩個模型都失敗時寫入試算表)
+var MANUAL_REVIEW_TAG = "⚠️ 待人工判級";
 
 // RAG 知識庫:存放 SOP 的試算表分頁名稱
 // 此分頁不會公開(只在你的 Google 試算表內),程式只負責讀取。
@@ -102,6 +106,12 @@ function doPost(e) {
       ai.guidance
     ]);
 
+    // 若 AI 全部失敗、需人工判級,把該列整列標成淺紅,讓承辦一眼看到
+    if (ai.severity === MANUAL_REVIEW_TAG) {
+      var row = sheet.getLastRow();
+      sheet.getRange(row, 1, 1, HEADERS.length).setBackground("#fde2e1");
+    }
+
     return jsonOutput_({
       ok: true,
       caseId: data.caseId,
@@ -122,16 +132,39 @@ function doGet() {
    Gemini AI 分析
    ============================================================ */
 
-// 把單筆通報交給 Gemini,回傳 { severity, guidance }
+// 把單筆通報交給 Gemini 分析,回傳 { severity, guidance }
+// 主模型忙碌(503/429)時,自動改用備援模型;全部失敗則標記「待人工判級」。
 function analyzeWithGemini_(data) {
   var apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
   if (!apiKey) {
     return { severity: "", guidance: "(尚未設定 GEMINI_API_KEY,請見檔案上方說明)" };
   }
 
+  var lastInfo = "";
+  // 依序嘗試每個模型(主 → 備援)
+  for (var m = 0; m < GEMINI_MODELS.length; m++) {
+    var outcome = callGeminiModel_(GEMINI_MODELS[m], apiKey, data);
+    if (outcome.ok) {
+      return { severity: outcome.severity, guidance: outcome.guidance };
+    }
+    lastInfo = outcome.info;
+    // 只有「暫時性忙碌」才換下一個模型試;其他錯誤直接跳出
+    if (!outcome.busy) break;
+  }
+
+  // 所有模型都失敗 → 標記待人工判級,提示承辦依 SOP 判斷
+  return {
+    severity: MANUAL_REVIEW_TAG,
+    guidance: "AI 服務暫時無法分析(" + lastInfo + ")。請承辦人員『依現場資訊與 SOP 自行判定分級並處置』,勿等待 AI。"
+  };
+}
+
+// 呼叫單一模型(含暫時性錯誤的小幅重試)
+// 回傳 { ok, busy, severity, guidance, info }
+function callGeminiModel_(model, apiKey, data) {
   try {
     var url = "https://generativelanguage.googleapis.com/v1beta/models/" +
-              GEMINI_MODEL + ":generateContent?key=" + apiKey;
+              model + ":generateContent?key=" + apiKey;
 
     // 組合 parts:第一段是文字提示,接著把現場照片一起送給 Gemini 辨識
     var parts = [{ text: buildPrompt_(data) }];
@@ -144,7 +177,6 @@ function analyzeWithGemini_(data) {
       contents: [{ parts: parts }],
       generationConfig: {
         temperature: 0.2,
-        // 要求 Gemini 直接輸出符合結構的 JSON,免去字串解析的麻煩
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
@@ -157,39 +189,41 @@ function analyzeWithGemini_(data) {
       }
     };
 
-    // 自動重試:免費模型遇到高負載(503/429/500)時,稍候重試最多 3 次
     var options = {
       method: "post",
       contentType: "application/json",
       payload: JSON.stringify(payload),
       muteHttpExceptions: true
     };
+
+    // 同一模型先小幅重試 2 次(因應瞬間忙碌)
     var res, code;
-    var MAX_TRIES = 3;
-    for (var t = 0; t < MAX_TRIES; t++) {
+    for (var t = 0; t < 2; t++) {
       res = UrlFetchApp.fetch(url, options);
       code = res.getResponseCode();
-      // 成功,或遇到非「暫時性」錯誤就不再重試
       if (code === 200 || (code !== 503 && code !== 429 && code !== 500)) break;
-      if (t < MAX_TRIES - 1) Utilities.sleep(1500 * (t + 1)); // 1.5s、3s 漸進等待
+      if (t < 1) Utilities.sleep(1200);
     }
 
-    if (code !== 200) {
-      var hint = (code === 503 || code === 429)
-        ? "(AI 服務暫時忙碌,稍後會恢復;此筆未自動分級,可稍後人工於試算表補判)"
-        : "(AI 分析失敗 HTTP " + code + ":" + res.getContentText().slice(0, 150) + ")";
-      return { severity: "", guidance: hint };
+    if (code === 200) {
+      var json = JSON.parse(res.getContentText());
+      var text = json.candidates[0].content.parts[0].text;
+      var result = JSON.parse(text);
+      return {
+        ok: true, busy: false,
+        severity: result.severity || "",
+        guidance: result.guidance || ""
+      };
     }
 
-    var json = JSON.parse(res.getContentText());
-    var text = json.candidates[0].content.parts[0].text;
-    var result = JSON.parse(text);
+    // 503/429 視為「忙碌」,讓上層換下一個備援模型
+    var busy = (code === 503 || code === 429 || code === 500);
     return {
-      severity: result.severity || "",
-      guidance: result.guidance || ""
+      ok: false, busy: busy,
+      info: model + " HTTP " + code
     };
   } catch (err) {
-    return { severity: "", guidance: "(AI 分析發生錯誤:" + err + ")" };
+    return { ok: false, busy: true, info: model + " 例外:" + err };
   }
 }
 
